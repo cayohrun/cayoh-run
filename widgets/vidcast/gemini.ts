@@ -242,8 +242,8 @@ export async function generateTTS(
     // 清理 Markdown 格式
     const cleanedText = cleanTextForTTS(text);
 
-    // 限制文字長度（避免 Edge Runtime 30 秒超時）
-    const maxLength = 1500; // 約 2250 tokens，確保在 30 秒內完成
+    // 限制文字長度（避免超過 Gemini API token 限制）
+    const maxLength = 5000; // 約 7500 tokens，支持長視頻完整播報
     const truncatedText = cleanedText.length > maxLength
       ? cleanedText.slice(0, maxLength) + '...'
       : cleanedText;
@@ -343,8 +343,8 @@ export async function generateTTSWithToken(
     // 清理 Markdown 格式
     const cleanedText = cleanTextForTTS(text);
 
-    // 限制文字長度（避免 Edge Runtime 30 秒超時）
-    const maxLength = 1500; // 約 2250 tokens，確保在 30 秒內完成
+    // 限制文字長度（避免超過 Gemini API token 限制）
+    const maxLength = 5000; // 約 7500 tokens，支持長視頻完整播報
     const truncatedText = cleanedText.length > maxLength
       ? cleanedText.slice(0, maxLength) + '...'
       : cleanedText;
