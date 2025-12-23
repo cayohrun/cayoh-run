@@ -37,7 +37,9 @@ export const VidCastWidget = () => {
   // 音頻播放器狀態
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [waveformBars] = useState(() => Array.from({ length: 20 }, () => Math.random() * 100));
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [playbackRate, setPlaybackRateState] = useState(1);
 
   // ========== 檢測 localStorage 可用性 ==========
   const checkStorageAvailability = (): boolean => {
@@ -105,6 +107,40 @@ export const VidCastWidget = () => {
       audioRef.current.play();
       setIsPlaying(true);
     }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = Number(e.target.value);
+    setCurrentTime(time);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const setPlaybackRate = (rate: number) => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+      setPlaybackRateState(rate);
+    }
+  };
+
+  const formatTime = (seconds: number): string => {
+    if (isNaN(seconds) || seconds === 0) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   // ========== 載入儲存的 API Key 和 TTS 使用記錄 ==========
@@ -413,33 +449,89 @@ export const VidCastWidget = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-          {/* 自定義音頻播放器 */}
-          {result.audioUrl && (
-            <div className="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3 border border-white/5">
-              {/* 播放/暫停按鈕 */}
-              <button
-                onClick={togglePlay}
-                className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 hover:bg-red-400 transition-colors"
-              >
-                {isPlaying ? (
-                  <Pause size={12} fill="white" />
-                ) : (
-                  <Play size={12} fill="white" className="ml-0.5" />
-                )}
-              </button>
+          {/* TTS Loading 占位符 */}
+          {loadingStage === 'generating-tts' && result && !result.audioUrl && (
+            <div className="bg-zinc-800/50 rounded-xl p-3 space-y-2 border border-white/5 animate-pulse">
+              {/* 第一行：播放按鈕 + 進度條 skeleton */}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-zinc-700/50"></div>
+                <div className="flex-1 h-1 bg-zinc-700/50 rounded-full"></div>
+                <div className="w-16 h-3 bg-zinc-700/50 rounded"></div>
+              </div>
+              {/* 第二行：倍速按鈕 skeleton */}
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="w-8 h-4 bg-zinc-700/50 rounded"></div>
+                ))}
+              </div>
+            </div>
+          )}
 
-              {/* 波形可視化 */}
-              <div className="flex-1 h-8 flex items-center gap-0.5">
-                {waveformBars.map((height, i) => (
-                  <div
-                    key={i}
-                    className="w-1 bg-zinc-600 rounded-full transition-all"
+          {/* 自定義音頻播放器 */}
+          {result?.audioUrl && (
+            <div className="bg-zinc-800/50 rounded-xl p-3 space-y-2 border border-white/5">
+              {/* 第一行：播放按鈕 + 進度條 + 時間 */}
+              <div className="flex items-center gap-3">
+                {/* 播放/暫停按鈕 */}
+                <button
+                  onClick={togglePlay}
+                  className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center flex-shrink-0 transition-colors"
+                >
+                  {isPlaying ? (
+                    <Pause size={12} fill="white" />
+                  ) : (
+                    <Play size={12} fill="white" className="ml-0.5" />
+                  )}
+                </button>
+
+                {/* 進度條 */}
+                <div className="flex-1 group">
+                  <input
+                    type="range"
+                    min="0"
+                    max={duration || 0}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer
+                               [&::-webkit-slider-thumb]:appearance-none
+                               [&::-webkit-slider-thumb]:w-3
+                               [&::-webkit-slider-thumb]:h-3
+                               [&::-webkit-slider-thumb]:rounded-full
+                               [&::-webkit-slider-thumb]:bg-red-500
+                               [&::-webkit-slider-thumb]:cursor-pointer
+                               [&::-webkit-slider-thumb]:opacity-0
+                               group-hover:[&::-webkit-slider-thumb]:opacity-100
+                               [&::-webkit-slider-thumb]:transition-opacity"
                     style={{
-                      height: `${height}%`,
-                      opacity: isPlaying ? 1 : 0.3,
-                      backgroundColor: isPlaying ? '#ef4444' : undefined,
+                      background: `linear-gradient(to right,
+                        rgb(239, 68, 68) 0%,
+                        rgb(239, 68, 68) ${duration ? (currentTime / duration) * 100 : 0}%,
+                        rgb(63, 63, 70) ${duration ? (currentTime / duration) * 100 : 0}%,
+                        rgb(63, 63, 70) 100%)`
                     }}
                   />
+                </div>
+
+                {/* 時間顯示 */}
+                <span className="text-xs text-zinc-500 font-mono tabular-nums">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </span>
+              </div>
+
+              {/* 第二行：倍速控制 */}
+              <div className="flex items-center gap-1">
+                {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
+                  <button
+                    key={speed}
+                    onClick={() => setPlaybackRate(speed)}
+                    className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
+                      playbackRate === speed
+                        ? 'bg-red-500 text-white'
+                        : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                    }`}
+                  >
+                    {speed}x
+                  </button>
                 ))}
               </div>
 
@@ -447,15 +539,41 @@ export const VidCastWidget = () => {
               <audio
                 ref={audioRef}
                 src={result.audioUrl}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
                 onEnded={() => setIsPlaying(false)}
               />
             </div>
           )}
 
+          {/* 文字生成 Loading 占位符 */}
+          {loadingStage === 'analyzing' && !result && (
+            <div className="space-y-3">
+              {[100, 95, 90, 85, 100, 80, 95].map((width, i) => (
+                <div
+                  key={i}
+                  className="h-3 rounded overflow-hidden relative"
+                  style={{ width: `${width}%` }}
+                >
+                  <div className="absolute inset-0 bg-zinc-700/50"></div>
+                  <div
+                    className="absolute inset-0 shimmer"
+                    style={{
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
+                      animation: 'shimmer 2s infinite'
+                    }}
+                  ></div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* 文字總結 */}
-          <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
-            {result.textSummary}
-          </p>
+          {result && (
+            <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
+              {result.textSummary}
+            </p>
+          )}
         </div>
 
         {/* 操作按鈕 */}

@@ -29,3 +29,17 @@ html {
 body {
   @apply bg-zinc-950 text-zinc-200;
 }
+
+/* Shimmer 動畫（用於文字生成 loading 占位符） */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer {
+  animation: shimmer 2s infinite;
+}
