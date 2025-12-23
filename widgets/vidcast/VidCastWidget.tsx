@@ -31,7 +31,7 @@ export const VidCastWidget = () => {
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState<LoadingStage>(null);
   const [error, setError] = useState('');
-  const [storageAvailable, setStorageAvailable] = useState(true);
+  const [storageAvailable, setStorageAvailable] = useState(false); // 修復：預設 false 避免 hydration mismatch
   const [ttsUsageCount, setTtsUsageCount] = useState<number>(0);
 
   // ========== 檢測 localStorage 可用性 ==========
