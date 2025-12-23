@@ -546,28 +546,6 @@ export const VidCastWidget = () => {
             </div>
           )}
 
-          {/* 文字生成 Loading 占位符 */}
-          {loadingStage === 'analyzing' && !result && (
-            <div className="space-y-3">
-              {[100, 95, 90, 85, 100, 80, 95].map((width, i) => (
-                <div
-                  key={i}
-                  className="h-3 rounded overflow-hidden relative"
-                  style={{ width: `${width}%` }}
-                >
-                  <div className="absolute inset-0 bg-zinc-700/50"></div>
-                  <div
-                    className="absolute inset-0 shimmer"
-                    style={{
-                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
-                      animation: 'shimmer 2s infinite'
-                    }}
-                  ></div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* 文字總結 */}
           {result && (
             <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
@@ -750,6 +728,28 @@ export const VidCastWidget = () => {
               </div>
               <span className="text-zinc-500 font-mono">約 1-2 分鐘</span>
             </div>
+
+            {/* 文字生成 Loading 占位符 */}
+            {loadingStage === 'analyzing' && (
+              <div className="space-y-3 mt-4">
+                {[100, 95, 90, 85, 100, 80, 95].map((width, i) => (
+                  <div
+                    key={i}
+                    className="h-3 rounded overflow-hidden relative"
+                    style={{ width: `${width}%` }}
+                  >
+                    <div className="absolute inset-0 bg-zinc-700/50"></div>
+                    <div
+                      className="absolute inset-0 shimmer"
+                      style={{
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
+                        animation: 'shimmer 2s infinite'
+                      }}
+                    ></div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <button
