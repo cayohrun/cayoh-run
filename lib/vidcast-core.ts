@@ -49,32 +49,47 @@ export interface AnalysisResult {
 // ========== YouTube URL 驗證 ==========
 
 /**
- * 驗證 YouTube URL 格式（支持普通視頻和 Shorts）
+ * 提取 YouTube Video ID
+ */
+function extractVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 驗證並標準化 YouTube URL（轉換為 Gemini API 要求的格式）
  *
  * @param url - YouTube URL
- * @returns 驗證結果
- *
- * @example
- * ```typescript
- * const result = validateYouTubeUrl('https://www.youtube.com/watch?v=xxx');
- * if (result.valid) {
- *   console.log('URL 有效');
- * } else {
- *   console.error(result.error);
- * }
- * ```
+ * @returns 驗證結果，包含 video ID
  */
-export function validateYouTubeUrl(url: string): ValidationResult {
-  const ytRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[\w-]{11}/;
+export function validateYouTubeUrl(url: string): ValidationResult & { videoId?: string } {
+  const videoId = extractVideoId(url);
 
-  if (!ytRegex.test(url)) {
+  if (!videoId) {
     return {
       valid: false,
       error: '請輸入有效的 YouTube 連結'
     };
   }
 
-  return { valid: true };
+  return { valid: true, videoId };
+}
+
+/**
+ * 將 Video ID 轉換為 Gemini API 標準格式
+ */
+export function normalizeYouTubeUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
 // ========== Prompt 生成 ==========
@@ -171,13 +186,19 @@ export async function analyzeVideo(
 
   const prompt = generateBroadcastPrompt(config);
 
+  // 提取並標準化 YouTube URL
+  const validation = validateYouTubeUrl(videoUrl);
+  if (!validation.valid || !validation.videoId) {
+    throw new Error(validation.error || '無效的 YouTube URL');
+  }
+  const normalizedUrl = normalizeYouTubeUrl(validation.videoId);
+
   try {
     const result = await model.generateContent([
       {
         fileData: {
-          mimeType: 'video/*',
-          fileUri: videoUrl,
-        },
+          fileUri: normalizedUrl,
+        } as any,
       },
       { text: prompt },
     ]);
@@ -227,9 +248,8 @@ export async function analyzeVideoWithToken(
         parts: [
           {
             fileData: {
-              mimeType: 'video/*',
               fileUri: videoUrl,
-            },
+            } as any,
           },
           { text: prompt },
         ],
@@ -365,6 +385,7 @@ export async function generateTTS(
       model: 'gemini-2.5-flash-preview-tts',
     });
 
+    // Gemini TTS API 支持 responseModalities，但 SDK 類型定義尚未更新
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: truncatedText }] }],
       generationConfig: {
@@ -376,7 +397,7 @@ export async function generateTTS(
             },
           },
         },
-      },
+      } as any,
     });
 
     // 提取音頻數據（PCM 格式）
