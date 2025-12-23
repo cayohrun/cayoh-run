@@ -449,35 +449,6 @@ export const VidCastWidget = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-          {/* 文字生成 Loading 占位符 */}
-          {loadingStage === 'analyzing' && !result && (
-            <div className="space-y-3">
-              {[100, 95, 90, 85, 100, 80, 95].map((width, i) => (
-                <div
-                  key={i}
-                  className="h-3 rounded overflow-hidden relative"
-                  style={{ width: `${width}%` }}
-                >
-                  <div className="absolute inset-0 bg-zinc-700/50"></div>
-                  <div
-                    className="absolute inset-0 shimmer"
-                    style={{
-                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
-                      animation: 'shimmer 2s infinite'
-                    }}
-                  ></div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 文字總結 */}
-          {result && (
-            <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
-              {result.textSummary}
-            </p>
-          )}
-
           {/* TTS Loading 占位符 */}
           {loadingStage === 'generating-tts' && result && !result.audioUrl && (
             <div className="bg-zinc-800/50 rounded-xl p-3 space-y-2 border border-white/5 animate-pulse">
@@ -573,6 +544,35 @@ export const VidCastWidget = () => {
                 onEnded={() => setIsPlaying(false)}
               />
             </div>
+          )}
+
+          {/* 文字生成 Loading 占位符 */}
+          {loadingStage === 'analyzing' && !result && (
+            <div className="space-y-3">
+              {[100, 95, 90, 85, 100, 80, 95].map((width, i) => (
+                <div
+                  key={i}
+                  className="h-3 rounded overflow-hidden relative"
+                  style={{ width: `${width}%` }}
+                >
+                  <div className="absolute inset-0 bg-zinc-700/50"></div>
+                  <div
+                    className="absolute inset-0 shimmer"
+                    style={{
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
+                      animation: 'shimmer 2s infinite'
+                    }}
+                  ></div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 文字總結 */}
+          {result && (
+            <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
+              {result.textSummary}
+            </p>
           )}
         </div>
 
