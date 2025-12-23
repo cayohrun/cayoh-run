@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Youtube, Copy, Download, RefreshCw, Zap, ArrowUpRight, Key, ExternalLink, Shield, Lock, Settings, X, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Youtube, Copy, Download, RefreshCw, Zap, ArrowUpRight, Key, ExternalLink, Shield, Lock, Settings, X, Trash2, Play, Pause } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 
 type SummaryResult = {
@@ -33,6 +33,11 @@ export const VidCastWidget = () => {
   const [error, setError] = useState('');
   const [storageAvailable, setStorageAvailable] = useState(false); // 修復：預設 false 避免 hydration mismatch
   const [ttsUsageCount, setTtsUsageCount] = useState<number>(0);
+
+  // 音頻播放器狀態
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [waveformBars] = useState(() => Array.from({ length: 20 }, () => Math.random() * 100));
 
   // ========== 檢測 localStorage 可用性 ==========
   const checkStorageAvailability = (): boolean => {
@@ -86,6 +91,19 @@ export const VidCastWidget = () => {
       setTtsUsageCount(newCount);
     } catch (e) {
       console.warn('無法更新 TTS 使用記錄:', e);
+    }
+  };
+
+  // ========== 音頻播放器控制 ==========
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
     }
   };
 
@@ -395,12 +413,42 @@ export const VidCastWidget = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-          {/* 音頻播放器 */}
+          {/* 自定義音頻播放器 */}
           {result.audioUrl && (
             <div className="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3 border border-white/5">
-              <audio controls src={result.audioUrl} className="w-full">
-                Your browser does not support the audio element.
-              </audio>
+              {/* 播放/暫停按鈕 */}
+              <button
+                onClick={togglePlay}
+                className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 hover:bg-red-400 transition-colors"
+              >
+                {isPlaying ? (
+                  <Pause size={12} fill="white" />
+                ) : (
+                  <Play size={12} fill="white" className="ml-0.5" />
+                )}
+              </button>
+
+              {/* 波形可視化 */}
+              <div className="flex-1 h-8 flex items-center gap-0.5">
+                {waveformBars.map((height, i) => (
+                  <div
+                    key={i}
+                    className="w-1 bg-zinc-600 rounded-full transition-all"
+                    style={{
+                      height: `${height}%`,
+                      opacity: isPlaying ? 1 : 0.3,
+                      backgroundColor: isPlaying ? '#ef4444' : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* 隱藏的原生 audio 元素 */}
+              <audio
+                ref={audioRef}
+                src={result.audioUrl}
+                onEnded={() => setIsPlaying(false)}
+              />
             </div>
           )}
 
