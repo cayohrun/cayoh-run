@@ -242,8 +242,8 @@ export async function generateTTS(
     // 清理 Markdown 格式
     const cleanedText = cleanTextForTTS(text);
 
-    // 限制文字長度（避免超過 32k token 限制）
-    const maxLength = 3000; // 約 4500 tokens
+    // 限制文字長度（避免 Edge Runtime 30 秒超時）
+    const maxLength = 1500; // 約 2250 tokens，確保在 30 秒內完成
     const truncatedText = cleanedText.length > maxLength
       ? cleanedText.slice(0, maxLength) + '...'
       : cleanedText;
@@ -343,8 +343,8 @@ export async function generateTTSWithToken(
     // 清理 Markdown 格式
     const cleanedText = cleanTextForTTS(text);
 
-    // 限制文字長度
-    const maxLength = 3000;
+    // 限制文字長度（避免 Edge Runtime 30 秒超時）
+    const maxLength = 1500; // 約 2250 tokens，確保在 30 秒內完成
     const truncatedText = cleanedText.length > maxLength
       ? cleanedText.slice(0, maxLength) + '...'
       : cleanedText;
