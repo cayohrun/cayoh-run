@@ -180,14 +180,24 @@ export const VidCastWidget = () => {
       // 第二階段：TTS 生成（異步）
       setLoadingStage('generating-tts');
 
-      const ttsRes = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: data.textSummary, apiKey }),
-      });
+      try {
+        const ttsRes = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: data.textSummary, apiKey }),
+        });
 
-      if (ttsRes.ok) {
+        console.log('[TTS] API 響應狀態:', ttsRes.status);
+
+        if (!ttsRes.ok) {
+          const errorText = await ttsRes.text();
+          console.error('[TTS] API 錯誤:', errorText);
+          throw new Error(`TTS 生成失敗: ${errorText}`);
+        }
+
         const ttsData = await ttsRes.json();
+        console.log('[TTS] API 響應數據:', ttsData);
+
         if (ttsData.success && ttsData.audioUrl) {
           // 更新結果，添加音頻
           setResult({
@@ -195,9 +205,14 @@ export const VidCastWidget = () => {
             audioUrl: ttsData.audioUrl,
           });
           incrementTtsUsage();
+          console.log('[TTS] 語音生成成功');
+        } else {
+          console.warn('[TTS] 無效的響應數據:', ttsData);
         }
+      } catch (ttsError: any) {
+        console.error('[TTS] 生成失敗:', ttsError);
+        // TTS 失敗不影響主流程，用戶仍然可以看到文字摘要
       }
-      // TTS 失敗不影響主流程，用戶仍然可以看到文字摘要
     } catch (err: any) {
       setError(err.message || '處理失敗');
     } finally {
