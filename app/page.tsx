@@ -27,9 +27,8 @@ export default function Home() {
             <h1 className="text-5xl md:text-7xl font-bold tracking-tighter text-white mb-4">
               cayoh<span className="text-indigo-500">.</span>run
             </h1>
-            <p className="text-zinc-400 text-lg md:text-xl max-w-md font-light leading-relaxed">
-              數位工藝實驗室。 <br/>
-              <span className="text-zinc-500 text-base">Design, Product, and Code Experiments.</span>
+            <p className="text-zinc-400 text-lg md:text-xl font-light tracking-wide">
+              PLAYGROUND
             </p>
           </div>
           <div className="flex gap-4">
