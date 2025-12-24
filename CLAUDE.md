@@ -51,6 +51,12 @@ cayoh.run/
 │   │   └── Badge.tsx        # 共用徽章組件
 │   ├── InteractiveGrid.tsx  # 背景互動網格
 │   └── TimeWidget.tsx       # 時間小工具
+├── .claude/
+│   └── skills/
+│       └── vidcast/         # VidCast Skill 套件
+│           ├── SKILL.md     # Skill 功能說明
+│           ├── TECHNICAL.md # 技術規格文檔
+│           └── USAGE.md     # 使用範例（Agent SDK、LINE Bot 等）
 ├── tasks/
 │   └── TODO.md              # 專案待辦事項追蹤
 ├── CHANGELOG.md             # 變更歷史記錄
@@ -147,6 +153,58 @@ vercel --prod
 ```
 
 Firebase Console 需新增部署域名到授權列表。
+
+## VidCast Skill 套件
+
+專案包含完整的 VidCast Skill，可用於不同平台集成。
+
+### 套件結構
+
+```
+.claude/skills/vidcast/
+├── SKILL.md      # Skill 功能說明與 API 文檔
+├── TECHNICAL.md  # 技術實現細節
+└── USAGE.md      # 使用範例（多平台集成）
+```
+
+### 支援的使用場景
+
+1. **Claude Code 整合**：自動偵測 YouTube URL 並提供分析
+2. **Agent SDK (TypeScript/Python)**：程式化調用 VidCast 功能
+3. **LINE Chatbot**：將 VidCast 整合到 LINE 聊天機器人
+4. **直接 API 調用**：透過 `/api/summarize` 端點使用
+
+### Skill 特色
+
+- ✅ Gemini 2.5 Flash Lite 視頻分析
+- ✅ 播報式文字摘要生成（600-2000 字）
+- ✅ TTS 語音合成（Kore 音色）
+- ✅ Firebase Google OAuth 認證
+- ✅ 支援 YouTube 標準視頻 + Shorts
+- ✅ 完整的錯誤處理與使用計數
+
+### 快速開始
+
+**Claude Code**：
+```
+分析這個視頻：https://www.youtube.com/watch?v=xxx
+```
+
+**Agent SDK (TypeScript)**：
+```typescript
+import { query } from "@anthropic-ai/claude-agent-sdk";
+
+for await (const message of query({
+  prompt: `分析這個視頻：${youtubeUrl}`,
+  options: { settingSources: ['project'] }
+})) {
+  if ("result" in message) {
+    console.log(message.result);
+  }
+}
+```
+
+**詳細文檔**：請參閱 `.claude/skills/vidcast/` 目錄中的文件
 
 ## 已知問題
 
