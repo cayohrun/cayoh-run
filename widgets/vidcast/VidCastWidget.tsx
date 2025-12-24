@@ -39,6 +39,7 @@ export const VidCastWidget = () => {
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [showSecurityDetails, setShowSecurityDetails] = useState(false);
   const [showKeyManagement, setShowKeyManagement] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState(''); // API Key 輸入框的值
   const [videoUrl, setVideoUrl] = useState('');
   const [result, setResult] = useState<SummaryResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -419,28 +420,55 @@ export const VidCastWidget = () => {
             </div>
           </div>
 
-          {/* 獲取 API Key 按鈕 */}
-          <a
-            href="https://aistudio.google.com/app/apikey"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-3 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white font-medium rounded-xl shadow-lg shadow-red-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
-          >
-            <ExternalLink size={16} />
-            前往 Google AI Studio 獲取免費 API Key
-          </a>
+          {/* API Key 驗證邏輯 */}
+          {(() => {
+            const isApiKeyValid = apiKeyInput.length >= 39 && apiKeyInput.startsWith('AIza');
+            return (
+              <>
+                {/* 獲取 API Key 按鈕 */}
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`w-full py-3 font-medium rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm ${
+                    isApiKeyValid
+                      ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                      : 'bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white shadow-lg shadow-red-900/20'
+                  }`}
+                >
+                  <ExternalLink size={16} />
+                  前往 Google AI Studio 獲取免費 API Key
+                </a>
 
-          {/* API Key 輸入 */}
-          <input
-            type="password"
-            placeholder="貼上 API Key 後按 Enter..."
-            className="w-full bg-zinc-950/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 transition-all"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                handleSaveApiKey(e.currentTarget.value.trim());
-              }
-            }}
-          />
+                {/* API Key 輸入 + 儲存按鈕 */}
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="貼上 API Key..."
+                    className="flex-1 bg-zinc-950/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && isApiKeyValid) {
+                        handleSaveApiKey(apiKeyInput);
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => handleSaveApiKey(apiKeyInput)}
+                    disabled={!isApiKeyValid}
+                    className={`px-4 py-3 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
+                      isApiKeyValid
+                        ? 'bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white shadow-lg shadow-red-900/20 active:scale-[0.98]'
+                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    }`}
+                  >
+                    儲存
+                  </button>
+                </div>
+              </>
+            );
+          })()}
 
           <div className="flex gap-2">
             <Badge color="red">2.5 Flash-Lite</Badge>
