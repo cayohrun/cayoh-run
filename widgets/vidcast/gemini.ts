@@ -186,7 +186,8 @@ export async function analyzeVideo(
       {
         fileData: {
           fileUri: normalizedUrl,
-        } as any,
+          mimeType: 'video/mp4',
+        },
       },
       { text: prompt },
     ]);
@@ -307,7 +308,8 @@ export async function analyzeVideoWithToken(
           {
             fileData: {
               fileUri: videoUrl,
-            } as any,
+              mimeType: 'video/mp4',
+            },
           },
           { text: prompt },
         ],
