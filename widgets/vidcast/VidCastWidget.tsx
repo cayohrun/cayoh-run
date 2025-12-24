@@ -1,12 +1,22 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Youtube, Copy, Download, RefreshCw, Zap, ArrowUpRight, Key, ExternalLink, Shield, Lock, Settings, X, Trash2, Play, Pause } from 'lucide-react';
+import { Youtube, Copy, Download, RefreshCw, Zap, ArrowUpRight, Key, ExternalLink, Shield, Lock, Settings, X, Trash2, Play, Pause, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+
+type Fact = {
+  id: number;
+  time: string;
+  fact: string;
+};
 
 type SummaryResult = {
   textSummary: string;
   audioUrl: string | null;
+  facts: Fact[];
+  confidence: 'high' | 'medium' | 'low';
+  warnings: string[];
+  hasSubtitles: boolean;
 };
 
 const API_KEY_STORAGE_KEY = 'gemini_api_key';
@@ -61,6 +71,9 @@ export const VidCastWidget = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRateState] = useState(1);
+
+  // Facts 展開狀態
+  const [showFacts, setShowFacts] = useState(false);
 
   // ========== 檢測 localStorage 可用性 ==========
   const checkStorageAvailability = (): boolean => {
@@ -253,10 +266,14 @@ export const VidCastWidget = () => {
       const textGenerationTime = (Date.now() - overallStartTime) / 1000;
       const wordCount = data.textSummary.length;
 
-      // 立即顯示文字摘要
+      // 立即顯示文字摘要（含新欄位）
       setResult({
         textSummary: data.textSummary,
         audioUrl: null,
+        facts: data.facts || [],
+        confidence: data.confidence || 'medium',
+        warnings: data.warnings || [],
+        hasSubtitles: data.hasSubtitles ?? true,
       });
 
       // 更新統計（TTS 尚未開始）
@@ -291,11 +308,11 @@ export const VidCastWidget = () => {
         if (ttsData.success && ttsData.audioUrl) {
           const ttsGenerationTime = (Date.now() - ttsStartTime) / 1000;
 
-          // 更新結果，添加音頻
-          setResult({
-            textSummary: data.textSummary,
+          // 更新結果，添加音頻（保留原有欄位）
+          setResult((prev) => prev ? {
+            ...prev,
             audioUrl: ttsData.audioUrl,
-          });
+          } : null);
 
           // 更新統計（添加 TTS 時間）
           setMetrics((prev) => prev ? {
@@ -621,6 +638,55 @@ export const VidCastWidget = () => {
             </div>
           )}
 
+          {/* 可信度指標 */}
+          {result && (
+            <div className="space-y-2">
+              {/* Confidence Badge */}
+              <div className="flex items-center gap-2">
+                {result.confidence === 'high' && (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg">
+                    <CheckCircle size={12} />
+                    <span>高可信度</span>
+                  </div>
+                )}
+                {result.confidence === 'medium' && (
+                  <div className="flex items-center gap-1.5 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-lg">
+                    <Info size={12} />
+                    <span>中可信度</span>
+                  </div>
+                )}
+                {result.confidence === 'low' && (
+                  <div className="flex items-center gap-1.5 text-xs text-red-400 bg-red-500/10 border border-red-500/30 px-2 py-1 rounded-lg">
+                    <AlertTriangle size={12} />
+                    <span>低可信度</span>
+                  </div>
+                )}
+                {!result.hasSubtitles && (
+                  <span className="text-[10px] text-zinc-500">（無字幕）</span>
+                )}
+              </div>
+
+              {/* 低可信度警告 */}
+              {result.confidence === 'low' && (
+                <div className="text-[10px] text-red-300/80 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
+                  ⚠️ 此摘要可能不準確。無字幕時僅基於標題描述生成，不含具體數據。
+                </div>
+              )}
+
+              {/* Warnings */}
+              {result.warnings.length > 0 && result.confidence !== 'low' && (
+                <div className="text-[10px] text-amber-300/80 space-y-0.5">
+                  {result.warnings.slice(0, 3).map((w, i) => (
+                    <p key={i}>⚠️ {w}</p>
+                  ))}
+                  {result.warnings.length > 3 && (
+                    <p className="text-zinc-500">... 還有 {result.warnings.length - 3} 個警告</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 統計標籤行 */}
           {metrics && (
             <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -643,6 +709,35 @@ export const VidCastWidget = () => {
             <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
               {result.textSummary}
             </p>
+          )}
+
+          {/* 可展開的 Facts 清單 */}
+          {result && result.facts.length > 0 && (
+            <div className="mt-4 border-t border-zinc-800 pt-3">
+              <button
+                onClick={() => setShowFacts(!showFacts)}
+                className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors w-full"
+              >
+                {showFacts ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <span>查看事實清單（{result.facts.length} 項）</span>
+              </button>
+
+              {showFacts && (
+                <div className="mt-3 space-y-2">
+                  {result.facts.map((fact) => (
+                    <div
+                      key={fact.id}
+                      className="flex gap-2 text-[11px] bg-zinc-900/50 border border-zinc-800 rounded-lg p-2"
+                    >
+                      <span className="text-zinc-600 font-mono shrink-0">
+                        [{fact.time}]
+                      </span>
+                      <span className="text-zinc-400">{fact.fact}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -754,7 +849,7 @@ export const VidCastWidget = () => {
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="text-xs text-zinc-400 font-mono">READY</span>
+          <span className="text-xs text-zinc-400 font-mono">VIDCAST v1.1</span>
         </div>
         <div className="flex gap-2 items-center">
           {/* API Key 狀態指示 */}

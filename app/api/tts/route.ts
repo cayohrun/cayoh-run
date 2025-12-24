@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateTTS } from '@/widgets/vidcast/gemini';
 
-// 使用 Edge Runtime
-export const runtime = 'edge';
+// 使用 Node.js Runtime（generateTTS 需要 Buffer）
+export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 // Rate Limiting

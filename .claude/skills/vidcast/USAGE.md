@@ -392,67 +392,75 @@ app.listen(3000);
 
 ---
 
-### 方案 B：直接調用核心邏輯
+### 方案 B：調用 VidCast API 端點
 
-**架構**:
+**架構**（v1.1.0 字幕優先）:
 ```
-LINE User → LINE Webhook → vidcast-core.ts → Gemini API
+LINE User → LINE Webhook → /api/summarize → 字幕分析 → Gemini API
 ```
 
 **實現**:
 ```typescript
-// lib/vidcast-core.ts （已在任務 2 創建）
-import { analyzeVideo, generateTTS } from './vidcast-core';
-
 // bot/handlers/vidcast.ts
 import { Client } from '@line/bot-sdk';
-import { analyzeVideo, generateTTS, validateYouTubeUrl } from '../../lib/vidcast-core';
+
+interface SummarizeResponse {
+  success: boolean;
+  textSummary: string;
+  facts: Array<{ id: number; time: string; fact: string }>;
+  confidence: 'high' | 'medium' | 'low';
+  warnings: string[];
+  hasSubtitles: boolean;
+  error?: string;
+}
 
 export async function handleVidCastRequest(
   lineClient: Client,
   userId: string,
   youtubeUrl: string
 ) {
-  // 驗證 URL
-  const validation = validateYouTubeUrl(youtubeUrl);
-  if (!validation.valid) {
-    await lineClient.pushMessage(userId, {
-      type: 'text',
-      text: `❌ ${validation.error}`
-    });
-    return;
-  }
-
   // 發送處理中訊息
   await lineClient.pushMessage(userId, {
     type: 'text',
-    text: '🎬 正在分析視頻...'
+    text: '🎬 正在分析視頻（字幕優先模式）...'
   });
 
   try {
     const apiKey = process.env.GEMINI_API_KEY!;
 
-    // 分析視頻
-    const summary = await analyzeVideo(apiKey, youtubeUrl);
-
-    // 生成 TTS（可選）
-    const audioUrl = await generateTTS(apiKey, summary);
-
-    // 發送摘要
-    await lineClient.pushMessage(userId, {
-      type: 'text',
-      text: `✅ 視頻分析完成\n\n${summary.substring(0, 2000)}`
+    // 調用 VidCast API（字幕優先架構）
+    const response = await fetch('https://cayoh.run/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoUrl: youtubeUrl, apiKey }),
     });
 
-    // 發送音頻（如果成功生成）
-    if (audioUrl) {
-      // LINE 不支持 data URI，需要上傳到 CDN
-      const audioFileUrl = await uploadToCDN(audioUrl);
+    const data: SummarizeResponse = await response.json();
 
+    if (!data.success) {
+      throw new Error(data.error || '分析失敗');
+    }
+
+    // 根據可信度添加標記
+    const confidenceEmoji = {
+      high: '✅',
+      medium: '⚠️',
+      low: '❓'
+    }[data.confidence];
+
+    // 發送摘要
+    const message = `${confidenceEmoji} 視頻分析完成（可信度: ${data.confidence}）\n\n${data.textSummary.substring(0, 1800)}`;
+
+    await lineClient.pushMessage(userId, {
+      type: 'text',
+      text: message
+    });
+
+    // 如果有警告，另外發送
+    if (data.warnings.length > 0) {
       await lineClient.pushMessage(userId, {
-        type: 'audio',
-        originalContentUrl: audioFileUrl,
-        duration: 60000  // 估計時長（毫秒）
+        type: 'text',
+        text: `⚠️ 注意事項：\n${data.warnings.join('\n')}`
       });
     }
 
@@ -463,13 +471,6 @@ export async function handleVidCastRequest(
     });
   }
 }
-
-// 上傳音頻到 CDN 的輔助函式
-async function uploadToCDN(dataUri: string): Promise<string> {
-  // 實現：上傳到 AWS S3、Cloudinary 或其他 CDN
-  // 返回公開可訪問的 URL
-  return 'https://cdn.example.com/audio/xxx.wav';
-}
 ```
 
 ---
@@ -478,41 +479,37 @@ async function uploadToCDN(dataUri: string): Promise<string> {
 
 ### cURL 範例
 
-**使用 API Key**:
+**分析視頻**:
 ```bash
 curl -X POST https://cayoh.run/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "apiKey": "AIzaSy..."
   }'
 ```
 
-**使用 OAuth Token**:
+**生成 TTS**:
 ```bash
-curl -X POST https://cayoh.run/api/summarize \
+curl -X POST https://cayoh.run/api/tts \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ya29.a0..." \
   -d '{
-    "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    "text": "這是要轉換成語音的文字...",
+    "apiKey": "AIzaSy..."
   }'
 ```
 
 ---
 
-### JavaScript/Fetch 範例
+### JavaScript/Fetch 範例（v1.1.0）
 
 ```javascript
-async function analyzeVideo(youtubeUrl, apiKey) {
+async function analyzeVideo(videoUrl, apiKey) {
+  // 步驟 1：分析視頻
   const response = await fetch('https://cayoh.run/api/summarize', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      youtubeUrl,
-      apiKey
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ videoUrl, apiKey })
   });
 
   if (!response.ok) {
@@ -521,14 +518,32 @@ async function analyzeVideo(youtubeUrl, apiKey) {
   }
 
   const data = await response.json();
+
+  // 處理可信度
+  if (data.confidence === 'low') {
+    console.warn('⚠️ 低可信度：無字幕，僅基於標題+作者生成');
+  }
+
+  // 顯示 facts
+  console.log('事實清單:');
+  data.facts.forEach(fact => {
+    console.log(`  [${fact.time}] ${fact.fact}`);
+  });
+
+  // 顯示警告
+  if (data.warnings.length > 0) {
+    console.warn('警告:', data.warnings);
+  }
+
   return data;
 }
 
 // 使用
 analyzeVideo('https://www.youtube.com/watch?v=xxx', 'AIzaSy...')
   .then(result => {
-    console.log('摘要:', result.summary);
-    console.log('音頻:', result.audioUrl);
+    console.log('摘要:', result.textSummary);
+    console.log('可信度:', result.confidence);
+    console.log('Facts 數量:', result.facts.length);
   })
   .catch(error => console.error(error));
 ```
@@ -607,7 +622,7 @@ https://www.youtube.com/watch?v=xxx
 ```typescript
 try {
   const result = await analyzeVideo(url, apiKey);
-  console.log(result.summary);
+  console.log(result.textSummary);  // v1.1.0: 使用 textSummary
 } catch (error: any) {
   if (error.message.includes('無效')) {
     // URL 格式錯誤

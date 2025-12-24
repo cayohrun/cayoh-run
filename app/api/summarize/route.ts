@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateYouTubeUrl, analyzeVideo, generateTTS } from '@/widgets/vidcast/gemini';
+import { validateYouTubeUrl, analyzeWithSubtitles, analyzeWithFallback } from '@/widgets/vidcast/gemini';
+import { fetchSubtitles, fetchVideoMetadata } from '@/lib/vidcast/subtitle';
+import { preprocessSubtitles, formatForPrompt } from '@/lib/vidcast/preprocess';
+import { parseModelOutput, validateAndClean, createLowConfidenceResult, ValidatedResult } from '@/lib/vidcast/postprocess';
 
-// 使用 Edge Runtime（更長執行時間）
-export const runtime = 'edge';
+// 使用 Node.js Runtime（字幕套件需要）
+export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 // Rate Limiting
@@ -69,7 +72,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. 驗證 YouTube URL（先驗證 URL，避免浪費 API 配額）
+    // 2. 驗證 YouTube URL
     const validation = validateYouTubeUrl(videoUrl);
     if (!validation.valid) {
       return NextResponse.json(
@@ -87,14 +90,77 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. 視頻分析（使用 API Key）
-    console.log(`[Summarize] 開始分析視頻: ${videoUrl}`);
-    const textSummary = await analyzeVideo(apiKey, videoUrl);
+    // 4. 抓取字幕
+    console.log(`[Summarize] 開始抓取字幕: ${videoUrl}`);
+    const subtitleResult = await fetchSubtitles(videoUrl);
 
-    // 5. 返回結果（暫時不生成 TTS 以避免超時）
+    let result: ValidatedResult;
+
+    if (subtitleResult.available && subtitleResult.segments.length > 0) {
+      // ===== 有字幕：使用 Facts-based 分析 =====
+      console.log(`[Summarize] 字幕可用 (${subtitleResult.language}), 共 ${subtitleResult.segments.length} 段`);
+
+      // 5. 前處理
+      const preprocessed = preprocessSubtitles(subtitleResult.segments);
+      const promptContent = formatForPrompt(preprocessed);
+      console.log(`[Summarize] 前處理完成: ${preprocessed.metadata.segmentCount} 段, ${preprocessed.extractedNumbers.length} 個數字`);
+
+      // 6. 調用模型（單次調用）
+      console.log(`[Summarize] 開始分析...`);
+      const rawOutput = await analyzeWithSubtitles(apiKey, promptContent);
+
+      // 7. 解析 JSON
+      const parsed = parseModelOutput(rawOutput);
+      if (!parsed) {
+        console.error('[Summarize] JSON 解析失敗，原始輸出:', rawOutput.slice(0, 500));
+        throw new Error('模型輸出格式錯誤，請重試');
+      }
+
+      // 8. 校驗
+      result = validateAndClean(parsed, true);
+      console.log(`[Summarize] 分析完成, 可信度: ${result.confidence}, facts: ${result.facts.length}`);
+
+    } else {
+      // ===== 無字幕：降級模式 =====
+      console.log(`[Summarize] 無字幕可用: ${subtitleResult.error || '未知原因'}`);
+
+      // Server-side 抓取視頻 metadata
+      console.log(`[Summarize] 抓取視頻 metadata...`);
+      const metadata = await fetchVideoMetadata(videoUrl);
+
+      if (!metadata || !metadata.title) {
+        // 連 metadata 都抓不到，直接報錯
+        return NextResponse.json({
+          success: false,
+          error: '此視頻沒有可用字幕，且無法獲取視頻資訊',
+          confidence: 'low',
+        }, { status: 400 });
+      }
+
+      // 使用降級模式（基於 oEmbed metadata）
+      console.log(`[Summarize] 使用降級模式，標題: ${metadata.title}`);
+      const rawOutput = await analyzeWithFallback(apiKey, metadata.title, `作者: ${metadata.author}`);
+
+      const parsed = parseModelOutput(rawOutput);
+      if (!parsed) {
+        result = createLowConfidenceResult(metadata.title, metadata.author, '無法生成摘要');
+      } else {
+        result = {
+          ...parsed,
+          confidence: 'low',
+          warnings: ['無字幕，僅基於標題描述生成，不含具體數據'],
+        };
+      }
+    }
+
+    // 9. 返回結果
     return NextResponse.json({
       success: true,
-      textSummary,
+      textSummary: result.summary,
+      facts: result.facts,
+      confidence: result.confidence,
+      warnings: result.warnings,
+      hasSubtitles: subtitleResult.available,
       audioUrl: null, // TTS 暫時禁用
     });
 

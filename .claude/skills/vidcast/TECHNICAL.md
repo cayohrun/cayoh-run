@@ -1,6 +1,6 @@
 # VidCast 技術詳解
 
-## 架構概覽
+## 架構概覽（v1.1.0 字幕優先架構）
 
 ```
 ┌─────────────┐
@@ -15,24 +15,51 @@
 └────────┬────────┘      └──────────────┘
          │
          ▼
+┌─────────────────────────────────────────┐
+│  /api/summarize (Node.js Runtime)       │
+└────────┬────────────────────────────────┘
+         │
+         ▼
 ┌─────────────────┐
-│  /api/summarize │
-│  (Next.js API)  │
+│  fetchSubtitles │ ◀── youtube-transcript
+│  (subtitle.ts)  │
 └────────┬────────┘
          │
-         ├─────────────────┐
-         ▼                 ▼
-┌─────────────────┐  ┌─────────────────┐
-│  analyzeVideo() │  │  generateTTS()  │
-│  (gemini.ts)    │  │  (gemini.ts)    │
-└────────┬────────┘  └────────┬────────┘
-         │                    │
-         ▼                    ▼
-┌────────────────────────────────┐
-│  Google Gemini API             │
-│  - 2.5 Flash Lite (視頻分析)   │
-│  - 2.5 Flash Preview TTS       │
-└────────────────────────────────┘
+         ▼
+┌─────────────────┐
+│  preprocess     │ ◀── 清理、分段、抽數字
+│  (preprocess.ts)│
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐      ┌─────────────────┐
+│ analyzeWith     │      │ analyzeWith     │
+│ Subtitles()     │  OR  │ Fallback()      │
+│ (有字幕)        │      │ (無字幕降級)    │
+└────────┬────────┘      └────────┬────────┘
+         │                        │
+         ▼                        ▼
+┌────────────────────────────────────┐
+│  Google Gemini API                 │
+│  - 2.5 Flash Lite (字幕分析)       │
+└────────┬───────────────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  postprocess    │ ◀── 解析 JSON、校驗數字
+│  (postprocess.ts)│
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  /api/tts (Node.js Runtime)             │
+└────────┬────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────┐
+│  Google Gemini TTS API             │
+│  - 2.5 Flash Preview TTS           │
+└────────────────────────────────────┘
 ```
 
 ## API 端點
@@ -41,72 +68,83 @@
 
 **位置**: `app/api/summarize/route.ts`
 
-**認證方式**:
-1. **OAuth Token** (推薦)
-   - 從 Firebase Auth 獲取
-   - Header: `Authorization: Bearer {accessToken}`
-
-2. **API Key**
-   - 用戶自帶 Gemini API Key
-   - Body: `{ apiKey: "..." }`
+**Runtime**: `nodejs`（字幕套件需要 Node.js）
 
 **請求格式**:
 ```typescript
 interface SummarizeRequest {
-  youtubeUrl: string;        // YouTube URL（必需）
-  apiKey?: string;           // Gemini API Key（與 accessToken 二選一）
-  accessToken?: string;      // Firebase OAuth Token（與 apiKey 二選一）
+  videoUrl: string;          // YouTube URL（必需）
+  apiKey: string;            // Gemini API Key（必需）
 }
 ```
 
 **請求範例**:
 ```json
 {
-  "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  "accessToken": "ya29.a0AfH6SMBx..."
-}
-```
-
-或
-
-```json
-{
-  "youtubeUrl": "https://www.youtube.com/shorts/xxx",
+  "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   "apiKey": "AIzaSyD..."
 }
 ```
 
-**響應格式**:
+**響應格式（v1.1.0）**:
 ```typescript
+interface Fact {
+  id: number;
+  time: string;              // "00:00-02:30"
+  fact: string;              // 具體事實描述
+}
+
 interface SummarizeResponse {
-  summary: string;           // 播報式文字摘要
-  audioUrl: string | null;   // TTS 音頻 (data:audio/wav;base64,...)
-  user?: {
-    email: string;
-    name: string;
-    picture: string;
-  };
-  ttsUsage?: {
-    date: string;            // YYYY-MM-DD
-    count: number;           // 今日使用次數
-  };
+  success: boolean;
+  textSummary: string;       // 播報式文字摘要
+  facts: Fact[];             // 事實清單
+  confidence: 'high' | 'medium' | 'low';
+  warnings: string[];        // 警告訊息
+  hasSubtitles: boolean;     // 是否有字幕
+  audioUrl: string | null;   // TTS 音頻（由 /api/tts 單獨生成）
 }
 ```
 
 **成功響應範例**:
 ```json
 {
-  "summary": "這段視頻介紹了最新的 AI 技術發展。首先，講者提到...",
-  "audioUrl": "data:audio/wav;base64,UklGRiQAAABXQVZF...",
-  "user": {
-    "email": "user@example.com",
-    "name": "John Doe",
-    "picture": "https://lh3.googleusercontent.com/..."
-  },
-  "ttsUsage": {
-    "date": "2025-12-24",
-    "count": 3
-  }
+  "success": true,
+  "textSummary": "這段視頻介紹了最新的 AI 技術發展...",
+  "facts": [
+    { "id": 1, "time": "00:00-02:30", "fact": "OpenAI 發布了 GPT-5" },
+    { "id": 2, "time": "02:30-05:00", "fact": "訓練成本降低 50%" }
+  ],
+  "confidence": "high",
+  "warnings": [],
+  "hasSubtitles": true,
+  "audioUrl": null
+}
+```
+
+**可信度說明**:
+- `high`：有字幕 + 所有數字已驗證 + 3+ facts
+- `medium`：有字幕 + 1-2 個數字未驗證
+- `low`：無字幕（僅基於標題+作者，由 oEmbed 獲取）
+
+### POST /api/tts
+
+**位置**: `app/api/tts/route.ts`
+
+**Runtime**: `nodejs`（Buffer 操作需要 Node.js）
+
+**請求格式**:
+```typescript
+interface TTSRequest {
+  text: string;              // 要轉換的文字
+  apiKey: string;            // Gemini API Key
+}
+```
+
+**響應格式**:
+```typescript
+interface TTSResponse {
+  success: boolean;
+  audioUrl: string;          // data:audio/wav;base64,...
 }
 ```
 
@@ -127,7 +165,84 @@ interface ErrorResponse {
 
 ---
 
-## 核心模塊
+## 核心模塊（v1.1.0 新增）
+
+### 0. 字幕抓取模組
+
+**位置**: `lib/vidcast/subtitle.ts`
+
+**依賴**: `youtube-transcript`, `server-only`
+
+**函式**:
+- `fetchSubtitles(videoUrl, preferredLang)` - 抓取 YouTube 字幕
+- `fetchVideoMetadata(videoUrl)` - 抓取視頻 metadata（oEmbed API）
+
+**輸出格式**:
+```typescript
+interface SubtitleSegment {
+  start: number;    // 開始時間（秒）
+  end: number;      // 結束時間（秒）
+  text: string;     // 字幕文字
+}
+
+interface SubtitleResult {
+  available: boolean;
+  language: string;
+  isAutoGenerated: boolean;
+  segments: SubtitleSegment[];
+  totalDuration: number;
+  error?: string;
+}
+```
+
+---
+
+### 0.1 前處理模組
+
+**位置**: `lib/vidcast/preprocess.ts`
+
+**功能**:
+- 清理口頭語（嗯嗯、那個、這個、就是說）
+- 分段（每 2-3 分鐘或 500-800 字）
+- 預抽取數字（金額、年份、百分比）
+
+**輸出格式**:
+```typescript
+interface PreprocessResult {
+  segments: ProcessedSegment[];
+  extractedNumbers: ExtractedNumber[];
+  metadata: {
+    totalDuration: number;
+    segmentCount: number;
+    totalCharacters: number;
+  };
+}
+```
+
+---
+
+### 0.2 後處理校驗模組
+
+**位置**: `lib/vidcast/postprocess.ts`
+
+**功能**:
+- 解析模型返回的 JSON
+- 提取 summary 中的數字
+- 檢查數字是否在 facts 中
+- 未驗證的數字標記「（待驗證）」
+- 計算 confidence 等級
+
+**輸出格式**:
+```typescript
+interface ValidatedResult {
+  facts: Fact[];
+  summary: string;
+  confidence: 'high' | 'medium' | 'low';
+  warnings: string[];
+}
+```
+
+---
 
 ### 1. YouTube URL 驗證
 
@@ -137,7 +252,7 @@ interface ErrorResponse {
 
 **支持的 URL 格式**:
 ```regex
-/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[\w-]{11}/
+/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
 ```
 
 **範例**:
@@ -157,98 +272,100 @@ validateYouTubeUrl('https://example.com');
 
 ---
 
-### 2. 視頻分析模塊
+### 2. 視頻分析模塊（v1.1.0 字幕優先）
 
 **位置**: `widgets/vidcast/gemini.ts`
 
-**函式**:
-- `analyzeVideo(apiKey: string, videoUrl: string)` - 使用 API Key
-- `analyzeVideoWithToken(accessToken: string, videoUrl: string)` - 使用 OAuth
+**主要函式**:
+- `analyzeWithSubtitles(apiKey, promptContent)` - 字幕分析（主流程）
+- `analyzeWithFallback(apiKey, title, description)` - 無字幕降級
 
 **Gemini 模型**: `gemini-2.5-flash-lite`
 
-**Prompt 設計**:
+**Prompt 設計（字幕分析）**:
 ```typescript
-function generateBroadcastPrompt(): string {
+function generateFactsBasedPrompt(preprocessedContent: string): string {
   return `
-請將這個視頻的內容改寫為一篇流暢易讀的文章摘要。
+你將收到 YouTube 視頻的字幕內容（含時間區間）和預抽取的數字清單。
 
-## 核心要求
-- **完整性**：必須涵蓋視頻從開頭到結尾的所有重要內容
-- **時間平衡**：前半段、中段、後半段必須均衡覆蓋
-- **流暢性**：使用自然的段落過渡，不要使用格式標記
-- **無時間戳**：不要標註時間區間
+## 輸入內容
+${preprocessedContent}
 
-## 結構要求
-1. 開頭用 1-2 句話簡潔概括視頻主題
-2. 主體內容分為多個段落（依視頻長度調整）
-3. 每段聚焦一個主題
-4. 結尾用 1-2 句話總結全文
+## 輸出要求
+請輸出 JSON 格式：
+{
+  "facts": [
+    { "id": 1, "time": "00:00-02:30", "fact": "具體事實描述" }
+  ],
+  "summary": "播報式摘要文字"
+}
 
-## 風格要求
-- 語言：繁體中文
-- 語氣：客觀專業、敘述流暢
-- 文章形式：像新聞報導或深度文章
-...
+## 約束
+- summary 中的數字必須出現在 facts 中
+- 若資訊不確定，標註「未明確提及」
+- 數字必須帶單位（億/萬/台）
   `.trim();
 }
 ```
 
-**實現細節**:
+**實現細節（字幕分析）**:
 ```typescript
-// 使用 API Key
-async function analyzeVideo(apiKey: string, videoUrl: string): Promise<string> {
+export async function analyzeWithSubtitles(
+  apiKey: string,
+  promptContent: string
+): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
-  const prompt = generateBroadcastPrompt();
+  const prompt = generateFactsBasedPrompt(promptContent);
 
-  const result = await model.generateContent([
-    {
-      fileData: {
-        mimeType: 'video/*',
-        fileUri: videoUrl,
-      },
-    },
-    { text: prompt },
-  ]);
-
+  const result = await model.generateContent([{ text: prompt }]);
   return result.response.text();
 }
+```
 
-// 使用 OAuth Token
-async function analyzeVideoWithToken(
-  accessToken: string,
-  videoUrl: string
+**降級模式（無字幕）**:
+```typescript
+export async function analyzeWithFallback(
+  apiKey: string,
+  title: string,
+  description: string  // 實際傳入: `作者: ${metadata.author}`
 ): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent`;
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [{
-        role: 'user',
-        parts: [
-          { fileData: { mimeType: 'video/*', fileUri: videoUrl } },
-          { text: generateBroadcastPrompt() },
-        ],
-      }],
-    }),
-  });
+  const prompt = `
+僅基於以下資訊生成概述：
+- 標題：${title}
+- 描述：${description || '（無描述）'}
 
-  const data = await response.json();
-  return data.candidates[0].content.parts[0].text;
+規則：
+- 只描述視頻的大致主題
+- 禁止包含任何數字、人名或具體結論
+- 長度：100-200 字
+- 語氣：「這個視頻似乎討論了...」
+
+輸出 JSON：
+{ "facts": [], "summary": "概述文字" }
+  `.trim();
+
+  const result = await model.generateContent([{ text: prompt }]);
+  return result.response.text();
 }
+```
+
+**舊版函式（已棄用）**:
+```typescript
+// 以下函式保留於 gemini.ts 但不再用於主流程
+// - analyzeVideo(apiKey, videoUrl) - 使用 fileData 多模態分析
+// - analyzeVideoWithToken(accessToken, videoUrl) - OAuth 版本
+// 這些函式可能用於未來的 OAuth 流程或特殊場景
 ```
 
 **錯誤處理**:
 ```typescript
 try {
-  const summary = await analyzeVideo(apiKey, videoUrl);
+  const result = await analyzeWithSubtitles(apiKey, promptContent);
 } catch (error: any) {
   if (error.message?.includes('API key')) {
     throw new Error('API Key 無效或已過期');
@@ -297,7 +414,7 @@ function cleanTextForTTS(text: string): string {
 
 **長度限制**:
 ```typescript
-const maxLength = 3000;  // 約 4500 tokens
+const maxLength = 5000;  // 約 7500 tokens，支持長視頻完整播報
 const truncatedText = cleanedText.length > maxLength
   ? cleanedText.slice(0, maxLength) + '...'
   : cleanedText;
@@ -347,8 +464,8 @@ function pcmToWav(pcmData: string): string {
 async function generateTTS(apiKey: string, text: string): Promise<string | null> {
   try {
     const cleanedText = cleanTextForTTS(text);
-    const truncatedText = cleanedText.length > 3000
-      ? cleanedText.slice(0, 3000) + '...'
+    const truncatedText = cleanedText.length > 5000
+      ? cleanedText.slice(0, 5000) + '...'
       : cleanedText;
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -446,7 +563,7 @@ GEMINI_API_KEY=AIzaSy...
 
 ### 視頻分析
 - **平均時間**: 10-30 秒（取決於視頻長度）
-- **超時設置**: 120 秒
+- **超時設置**: 60 秒（Vercel/Render 通用配置）
 - **重試策略**: 遇到 503 錯誤時提示用戶稍後重試
 
 ### TTS 生成
@@ -489,19 +606,21 @@ await redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);  // 1 小時
 **核心依賴**:
 ```json
 {
-  "@google/generative-ai": "^0.21.0",
-  "firebase": "^10.7.0",
-  "next": "^15.5.9",
-  "react": "^19.0.0"
+  "@google/generative-ai": "^0.24.1",
+  "firebase": "^10.13.0",
+  "next": "^15.1.3",
+  "react": "^18.3.1",
+  "youtube-transcript": "^1.2.1",
+  "server-only": "^0.0.1"
 }
 ```
 
 **開發依賴**:
 ```json
 {
-  "typescript": "^5.3.0",
-  "@types/node": "^20.0.0",
-  "@types/react": "^19.0.0"
+  "typescript": "^5",
+  "@types/node": "^20",
+  "@types/react": "^18"
 }
 ```
 
@@ -558,6 +677,19 @@ console.error('[Summarize] 錯誤:', error.message);
 ---
 
 ## 版本歷史
+
+### v1.1.0 (2025-12-25)
+- **字幕優先架構**：提升摘要準確性
+- **新增模組**：
+  - `lib/vidcast/subtitle.ts`：字幕抓取
+  - `lib/vidcast/preprocess.ts`：前處理（清理、分段、抽數字）
+  - `lib/vidcast/postprocess.ts`：後處理校驗
+- **Facts-based 生成**：輸出結構化 JSON
+- **可信度指標**：high / medium / low
+- **數字驗證**：未驗證的數字標記「（待驗證）」
+- **無字幕降級**：僅基於標題+作者（oEmbed），嚴格限制輸出
+- **Runtime 變更**：Edge → Node.js（字幕套件 + Buffer 需要）
+- **新增依賴**：`youtube-transcript`, `server-only`
 
 ### v1.0.0 (2025-12-24)
 - 初始版本

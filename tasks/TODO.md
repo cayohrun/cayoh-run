@@ -1,25 +1,26 @@
 # cayoh.run - 待辦事項
 
-## 🔴 高優先級
+## 🟡 中優先級
 
-### 1. VidCast API 超時問題
-**問題描述**：
-- Vercel Edge Runtime 限制 30 秒執行時間
-- 視頻分析 (20-40s) + TTS 生成 (10-20s) = 30-60 秒
-- 當前配置可能導致長視頻處理超時
+### 1. VidCast API 極端超時情況
+**狀態**：✅ 已大幅緩解（v1.1.0）
 
-**解決方案選項**：
-1. **升級 Vercel Pro** ($20/月) - 60 秒限制
-2. **遷移至 Railway/Render** - 免費方案無時間限制
-3. **重構為異步架構** - 使用 Firestore 儲存結果，前端輪詢
+**已完成改進**：
+- ✅ 遷移至 **Node.js Runtime**（非 Edge Runtime）
+- ✅ maxDuration = 60 秒
+- ✅ 字幕優先架構，減少模型分析時間
 
-**限制條件**：
-- ⚠️ **語音生成是核心功能，不可移除**
-- 需保持用戶體驗流暢
+**剩餘風險**：
+- 極端情況下（超長視頻 + 網路延遲 + 字幕抓取失敗重試）仍可能超過 60 秒
+- TTS 對超長文本（接近 5000 字）生成時間較長
+
+**備選方案**（如需進一步優化）：
+1. **遷移至 Railway/Render** - 免費方案無時間限制
+2. **重構為異步架構** - 使用 Firestore 儲存結果，前端輪詢
 
 **相關文件**：
-- `app/api/summarize/route.ts` (line 5-6: Edge Runtime 配置)
-- `vercel.json` (line 4: maxDuration 配置)
+- `app/api/summarize/route.ts` (runtime: nodejs, maxDuration: 60)
+- `app/api/tts/route.ts` (runtime: nodejs, maxDuration: 60)
 
 ---
 
@@ -86,4 +87,4 @@
 ## 📝 備註
 
 - 創建時間：2025-12-24
-- 最後更新：2025-12-24 (播放器增強完成，新增播放器佔位符優化待辦)
+- 最後更新：2025-12-25 (v1.1.0 字幕優先架構完成，超時問題已大幅緩解)

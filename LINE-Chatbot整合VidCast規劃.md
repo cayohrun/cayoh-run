@@ -54,13 +54,15 @@ LINE Webhook 接收訊息
 
 **Collection**: `vidcast_results`
 
-**Document 結構**：
+**Document 結構（v1.1.0）**：
 ```typescript
 {
   id: string;              // 短 ID (例如: "abc123")
-  youtubeUrl: string;      // 原始 YouTube URL
-  summary: string;         // 文字摘要
-  audioUrl: string;        // base64 audio data URI
+  videoUrl: string;        // 原始 YouTube URL（v1.1.0: 統一使用 videoUrl）
+  textSummary: string;     // 文字摘要（v1.1.0: textSummary 非 summary）
+  facts: Array<{id, time, fact}>;  // v1.1.0: 事實清單
+  confidence: 'high' | 'medium' | 'low';  // v1.1.0: 可信度指標
+  audioUrl: string;        // base64 audio data URI（來自 /api/tts）
   createdAt: Timestamp;    // 建立時間
   userId?: string;         // LINE 用戶 ID（可選）
   expiresAt?: Timestamp;   // 過期時間（可選，7天後）
@@ -126,31 +128,45 @@ export async function POST(req: NextRequest) {
           text: '正在分析視頻，請稍候...'
         });
 
-        // 2. 調用 VidCast API
-        const result = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/summarize`, {
+        // 2. 調用 VidCast API（字幕優先架構 v1.1.0）
+        const summarizeResult = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/summarize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            youtubeUrl,
+            videoUrl: youtubeUrl,  // v1.1.0: 參數名為 videoUrl
             apiKey: process.env.GEMINI_API_KEY, // 使用伺服器端 API Key
           }),
         });
 
-        const { summary, audioUrl } = await result.json();
+        const { textSummary, facts, confidence } = await summarizeResult.json();  // v1.1.0: textSummary（非 summary）
 
-        // 3. 儲存到 Firestore
+        // 3. 調用 TTS API（分離的端點）
+        const ttsResult = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: textSummary,
+            apiKey: process.env.GEMINI_API_KEY,
+          }),
+        });
+
+        const { audioUrl } = await ttsResult.json();
+
+        // 4. 儲存到 Firestore
         const shortId = generateShortId(); // 6 位隨機字串
         await addDoc(collection(db, 'vidcast_results'), {
           id: shortId,
-          youtubeUrl,
-          summary,
+          videoUrl: youtubeUrl,  // v1.1.0: 統一使用 videoUrl
+          textSummary,           // v1.1.0: textSummary（非 summary）
+          facts,                 // v1.1.0: 事實清單
+          confidence,            // v1.1.0: 可信度指標
           audioUrl,
           createdAt: new Date(),
           userId: event.source.userId,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 天後過期
         });
 
-        // 4. 發送結果連結
+        // 5. 發送結果連結
         const shareUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/v/${shortId}`;
         await client.pushMessage(event.source.userId!, {
           type: 'text',
@@ -202,11 +218,22 @@ export default async function ResultPage({ params }: { params: { id: string } })
     notFound();
   }
 
-  const { summary, audioUrl, youtubeUrl, createdAt } = docSnap.data();
+  const { textSummary, facts, confidence, audioUrl, videoUrl, createdAt } = docSnap.data();  // v1.1.0
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-200 p-8">
       <div className="max-w-4xl mx-auto">
+        {/* 可信度指標 */}
+        {confidence && (
+          <div className={`mb-4 px-3 py-1 rounded inline-block text-sm ${
+            confidence === 'high' ? 'bg-green-900 text-green-200' :
+            confidence === 'medium' ? 'bg-yellow-900 text-yellow-200' :
+            'bg-red-900 text-red-200'
+          }`}>
+            可信度：{confidence === 'high' ? '高' : confidence === 'medium' ? '中' : '低'}
+          </div>
+        )}
+
         {/* 音頻播放器 */}
         <div className="mb-8 bg-zinc-900 rounded-lg p-6">
           <audio
@@ -221,13 +248,13 @@ export default async function ResultPage({ params }: { params: { id: string } })
         <div className="bg-zinc-900 rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">視頻摘要</h2>
           <p className="text-zinc-300 whitespace-pre-wrap leading-relaxed">
-            {summary}
+            {textSummary}
           </p>
         </div>
 
         {/* 元數據 */}
         <div className="mt-4 text-sm text-zinc-500">
-          <p>YouTube URL: {youtubeUrl}</p>
+          <p>YouTube URL: {videoUrl}</p>
           <p>生成時間: {new Date(createdAt).toLocaleString('zh-TW')}</p>
         </div>
       </div>

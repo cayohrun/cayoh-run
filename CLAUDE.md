@@ -85,15 +85,16 @@ NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-app.firebaseapp.com
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
 ```
 
-## VidCast Widget
+## VidCast Widget (v1.1.0)
 
-YouTube 視頻播報式總結生成器，使用 Gemini API 進行視頻分析和 TTS 語音生成。
+YouTube 視頻播報式總結生成器，使用字幕優先架構進行分析和 TTS 語音生成。
 
 **運作流程**: Google 登入 → 輸入 Gemini API Key → 貼上 YouTube URL → 生成播報式總結 + 語音
 
-**技術細節**:
-- Gemini 2.0 Flash 視頻分析（原生支援 YouTube URL）
-- Gemini TTS 語音生成（音色: Kore）
+**技術細節（v1.1.0 字幕優先架構）**:
+- **分析流程**: videoUrl → 字幕抓取 → 前處理 → Gemini 2.5 Flash Lite（文字分析）→ JSON → 後處理校驗
+- **TTS 流程**: 單獨調用 `/api/tts`，使用 Gemini 2.5 Flash Preview TTS（音色: Kore）
+- **降級模式**: 無字幕時僅基於標題+作者（oEmbed）生成低可信度摘要
 - 用戶自帶 API Key（localStorage）
 
 **音頻播放器特色**:
@@ -125,18 +126,21 @@ YouTube 視頻播報式總結生成器，使用 Gemini API 進行視頻分析和
 ## API 路由
 
 ### `/api/summarize` (POST)
-- 接收 YouTube URL 和 Gemini API Key
-- 使用 Gemini 2.0 Flash 分析視頻
-- 返回播報式文字總結
-- Edge Runtime 配置
+- 接收 `{ videoUrl, apiKey }`
+- 字幕優先架構：抓取字幕 → 前處理 → Gemini 2.5 Flash Lite 分析
+- 返回 `{ success, textSummary, facts, confidence, warnings, hasSubtitles, audioUrl: null }`
+- **Node.js Runtime**，maxDuration = 60s
+- Rate Limit: 3 次/分鐘
 
 ### `/api/tts` (POST)
-- 接收文字內容和 Gemini API Key
-- 使用 Gemini TTS 生成語音
-- 返回 WAV 格式音頻 (base64)
-- 音色：Kore
+- 接收 `{ text, apiKey }`
+- 使用 Gemini 2.5 Flash Preview TTS 生成語音
+- 返回 `{ success, audioUrl }` (WAV base64)
+- 音色：Kore，長度上限 5000 字
+- **Node.js Runtime**，maxDuration = 60s
+- Rate Limit: 5 次/分鐘
 
-**注意**: Vercel Edge Runtime 有 30 秒執行時間限制，長視頻可能超時
+**注意**: 已遷移至 Node.js Runtime，超時問題已緩解。字幕抓取或 TTS 仍可能在極端情況下超時。
 
 ## 部署
 
@@ -158,6 +162,12 @@ Firebase Console 需新增部署域名到授權列表。
 
 專案包含完整的 VidCast Skill，可用於不同平台集成。
 
+> **⚠️ 重要維護規則**：每次 VidCast Widget 代碼更新時，必須：
+> 1. 完整讀取所有相關代碼文件（gemini.ts, route.ts, VidCastWidget.tsx 等）
+> 2. 使用 grep 搜索所有需要同步的字串
+> 3. 根據實際代碼一次性同步更新 `.claude/skills/vidcast/` 下的所有文檔
+> 4. 驗證無遺漏後才算完成
+
 ### 套件結構
 
 ```
@@ -177,7 +187,7 @@ Firebase Console 需新增部署域名到授權列表。
 ### Skill 特色
 
 - ✅ Gemini 2.5 Flash Lite 視頻分析
-- ✅ 播報式文字摘要生成（600-2000 字）
+- ✅ 播報式文字摘要生成（500-1500 字）
 - ✅ TTS 語音合成（Kore 音色）
 - ✅ Firebase Google OAuth 認證
 - ✅ 支援 YouTube 標準視頻 + Shorts
@@ -211,5 +221,5 @@ for await (const message of query({
 詳見 `tasks/TODO.md` 和 `CHANGELOG.md`
 
 **主要技術債務**:
-- VidCast API 超時問題（Vercel Edge Runtime 30s 限制）
 - 播放器 skeleton 優化（Step 2/2 顯示效果）
+- 極端情況下字幕抓取或 TTS 可能超過 60s（已遷移至 Node.js Runtime）

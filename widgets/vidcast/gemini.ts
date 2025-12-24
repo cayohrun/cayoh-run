@@ -400,3 +400,149 @@ export async function generateTTSWithToken(
     return null;
   }
 }
+
+/**
+ * 生成 Facts-based Prompt（用於字幕分析）
+ */
+export function generateFactsBasedPrompt(preprocessedContent: string): string {
+  return `
+你將收到一個 YouTube 視頻的分段字幕和預抽取的數字清單。請分析內容並輸出 JSON 格式的結果。
+
+${preprocessedContent}
+
+---
+
+## 輸出要求
+
+請輸出以下 JSON 格式（不要包含 Markdown 代碼塊標記）：
+
+{
+  "facts": [
+    { "id": 1, "time": "00:00-02:30", "fact": "具體事實描述，必須包含準確的數字和單位" },
+    { "id": 2, "time": "02:30-05:00", "fact": "..." }
+  ],
+  "summary": "摘要文字..."
+}
+
+## 約束規則
+
+### Facts 規則
+1. 每個事實必須包含具體的數字、人名或事件
+2. 數字必須帶完整單位（如：1000億美元，而非 1000）
+3. 按時間順序排列
+4. 優先記錄：金額、百分比、年份、人數、重要人名、關鍵事件
+
+### Summary 規則
+1. **只能使用 facts 中已記錄的資訊**
+2. 若要提及數字，該數字必須先出現在 facts 中
+3. 若某資訊不確定，標註「未明確提及」
+4. 禁止推測或編造 facts 中沒有的內容
+5. 長度：500-1500 字，視內容豐富度調整
+6. 語言：繁體中文
+7. 風格：流暢的敘述文，像新聞報導
+
+### 禁止事項
+- 不要混淆數字（如把「1000億」寫成「1000」）
+- 不要忽略爭議性或負面內容
+- 不要只關注前半段，必須涵蓋完整內容
+- 不要在 summary 中使用 facts 沒有的數字
+
+直接輸出 JSON，不要加任何說明文字。
+`.trim();
+}
+
+/**
+ * 生成降級模式 Prompt（無字幕時使用）
+ */
+export function generateFallbackPrompt(title: string, description: string): string {
+  return `
+僅基於以下資訊生成概述：
+
+- 標題：${title}
+- 描述：${description || '（無描述）'}
+
+## 嚴格規則
+- 只描述視頻的大致主題和可能內容
+- **禁止**包含任何具體數字（金額、年份、百分比）
+- **禁止**提及具體人名
+- **禁止**做出精細結論或預測
+- **禁止**使用「視頻中提到」這類措辭
+- 使用「這個視頻似乎討論了...」「可能涉及...」等不確定語氣
+
+## 輸出要求
+請輸出 JSON 格式：
+
+{
+  "facts": [],
+  "summary": "這個視頻似乎討論了..."
+}
+
+長度：100-200 字
+語言：繁體中文
+
+直接輸出 JSON，不要加任何說明文字。
+`.trim();
+}
+
+/**
+ * 使用字幕分析視頻（Facts-based 方法）
+ */
+export async function analyzeWithSubtitles(
+  apiKey: string,
+  preprocessedContent: string
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
+  const prompt = generateFactsBasedPrompt(preprocessedContent);
+
+  try {
+    const result = await model.generateContent([{ text: prompt }]);
+    const text = result.response.text();
+
+    if (!text) {
+      throw new Error('Gemini API 未返回任何內容');
+    }
+
+    return text;
+  } catch (error: any) {
+    if (error.message?.includes('API key')) {
+      throw new Error('API Key 無效或已過期');
+    } else if (error.message?.includes('quota') || error.message?.includes('Resource exhausted') || error.message?.includes('429')) {
+      throw new Error('API 配額已用完，請稍後再試（或更換 API Key）');
+    } else if (error.message?.includes('503') || error.message?.includes('overloaded') || error.message?.includes('Service Unavailable')) {
+      throw new Error('Google 服務暫時過載，請稍候 1-2 分鐘後再試');
+    }
+    throw new Error('分析失敗，請稍後再試');
+  }
+}
+
+/**
+ * 降級模式分析（無字幕時使用）
+ */
+export async function analyzeWithFallback(
+  apiKey: string,
+  title: string,
+  description: string
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
+  const prompt = generateFallbackPrompt(title, description);
+
+  try {
+    const result = await model.generateContent([{ text: prompt }]);
+    const text = result.response.text();
+
+    if (!text) {
+      throw new Error('Gemini API 未返回任何內容');
+    }
+
+    return text;
+  } catch (error: any) {
+    if (error.message?.includes('API key')) {
+      throw new Error('API Key 無效或已過期');
+    }
+    throw new Error('分析失敗，請稍後再試');
+  }
+}

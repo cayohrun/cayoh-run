@@ -1,6 +1,21 @@
-# 🎬 VidCast - YouTube 播報式總結生成器
+# 🎬 VidCast - 字幕優先播報式總結生成器（v1.1.0）
 
-## 產品概述
+> ⚠️ **LEGACY DOCUMENT（已過時）**
+>
+> 此文檔為 VidCast v1.0.0 初版規劃，**不再適用於當前實現**。
+>
+> **當前架構**：
+> - v1.1.0 採用「字幕優先架構」，非 fileData 視頻分析
+> - API 使用 `{ videoUrl, apiKey }` 格式，返回 `{ textSummary, facts, confidence, ... }`
+> - TTS 需單獨調用 `/api/tts`
+>
+> **請參閱**：
+> - `.claude/skills/vidcast/` - 最新技術文檔
+> - `CLAUDE.md` - 專案說明
+
+---
+
+## 產品概述（舊版規劃）
 
 一個 Web 應用，輸入 YouTube 連結，利用 **Gemini API** 多模態能力直接分析視頻內容（無需字幕），一鍵生成「播報式」文字總結 + 語音版本。
 
