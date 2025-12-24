@@ -663,36 +663,36 @@ export const VidCastWidget = () => {
   // ========== 輸入模式 ==========
   return (
     <div className="relative z-10 h-full flex flex-col justify-between">
-      {/* API Key 管理彈窗 */}
+      {/* API Key 管理彈窗 - 卡片內滿版（用負邊距覆蓋 Card 的 p-6） */}
       {showKeyManagement && (
-        <div className="absolute inset-0 bg-black/95 backdrop-blur-sm z-20 rounded-2xl p-6 flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-white font-medium">API Key 管理</h3>
+        <div className="absolute -inset-6 bg-zinc-950 z-20 rounded-3xl p-6 flex flex-col overflow-hidden">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-medium text-sm">API Key 管理</h3>
             <button
               onClick={() => setShowKeyManagement(false)}
               className="text-zinc-500 hover:text-white transition-colors"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
 
-          <div className="space-y-4 flex-1">
+          <div className="flex-1 overflow-y-auto space-y-3">
             {/* 當前狀態 */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm text-zinc-300">API Key 已設定</span>
+                <span className="text-xs text-zinc-300">API Key 已設定</span>
               </div>
-              <div className="font-mono text-xs text-zinc-500 bg-zinc-950 p-2 rounded">
-                {apiKey.slice(0, 8)}••••••••••••{apiKey.slice(-4)}
+              <div className="font-mono text-[10px] text-zinc-500 bg-black/50 p-1.5 rounded truncate">
+                {apiKey.slice(0, 8)}••••••{apiKey.slice(-4)}
               </div>
             </div>
 
             {/* 儲存位置說明 */}
-            <div className="text-xs text-zinc-500 space-y-2">
-              <p><strong className="text-zinc-400">儲存位置：</strong> localStorage (gemini_api_key)</p>
-              <p><strong className="text-zinc-400">使用方式：</strong> 僅在你的瀏覽器調用 Google API</p>
-              <p><strong className="text-zinc-400">安全建議：</strong> 不使用時請刪除</p>
+            <div className="text-[10px] text-zinc-500 space-y-1">
+              <p><strong className="text-zinc-400">儲存：</strong>localStorage</p>
+              <p><strong className="text-zinc-400">用途：</strong>調用 Google API</p>
+              <p><strong className="text-zinc-400">建議：</strong>不用時請刪除</p>
             </div>
 
             {/* 快速操作 */}
@@ -701,21 +701,21 @@ export const VidCastWidget = () => {
                 href="https://aistudio.google.com/app/apikey"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs flex items-center justify-center gap-2 transition-colors"
               >
-                <ExternalLink size={14} />
-                在 Google 查看配額使用
+                <ExternalLink size={12} />
+                查看 Google 配額
               </a>
               <button
                 onClick={() => {
-                  if (confirm('確定要刪除 API Key？刪除後需重新輸入才能使用。')) {
+                  if (confirm('確定要刪除 API Key？')) {
                     handleResetApiKey();
                     setShowKeyManagement(false);
                   }
                 }}
-                className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors border border-red-500/30"
+                className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs flex items-center justify-center gap-2 transition-colors border border-red-500/30"
               >
-                <Trash2 size={14} />
+                <Trash2 size={12} />
                 刪除 API Key
               </button>
             </div>
@@ -762,6 +762,10 @@ export const VidCastWidget = () => {
             className="w-full bg-zinc-950/50 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 transition-all"
           />
         </div>
+        {/* 視頻長度提示 */}
+        <p className="text-xs text-zinc-500 mt-1.5 pl-1">
+          💡 建議視頻長度 40 分鐘內，時間越長生成越久
+        </p>
 
         {/* 錯誤訊息 */}
         {error && (
