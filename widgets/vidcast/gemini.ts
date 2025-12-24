@@ -199,6 +199,8 @@ export async function analyzeVideo(
 
     return text;
   } catch (error: any) {
+    console.error('[Gemini API] 原始錯誤:', error);
+
     if (error.message?.includes('API key')) {
       throw new Error('API Key 無效或已過期');
     } else if (error.message?.includes('quota') || error.message?.includes('Resource exhausted') || error.message?.includes('429')) {
@@ -208,7 +210,8 @@ export async function analyzeVideo(
     } else if (error.message?.includes('video')) {
       throw new Error('無法訪問該視頻，請確認視頻為公開狀態');
     }
-    throw new Error('視頻分析失敗，請稍後再試');
+    // 顯示實際錯誤訊息以便診斷
+    throw new Error(`視頻分析失敗: ${error.message || '未知錯誤'}`);
   }
 }
 
@@ -319,6 +322,8 @@ export async function analyzeVideoWithToken(
 
     return text;
   } catch (error: any) {
+    console.error('[Gemini API] 原始錯誤:', error);
+
     if (error.message?.includes('401') || error.message?.includes('403')) {
       throw new Error('OAuth 認證失敗，請重新登入');
     } else if (error.message?.includes('quota') || error.message?.includes('Resource exhausted') || error.message?.includes('429')) {
@@ -328,7 +333,8 @@ export async function analyzeVideoWithToken(
     } else if (error.message?.includes('video')) {
       throw new Error('無法訪問該視頻，請確認視頻為公開狀態');
     }
-    throw new Error('視頻分析失敗，請稍後再試');
+    // 顯示實際錯誤訊息以便診斷
+    throw new Error(`視頻分析失敗: ${error.message || '未知錯誤'}`);
   }
 }
 
