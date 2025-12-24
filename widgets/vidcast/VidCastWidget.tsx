@@ -13,6 +13,19 @@ const API_KEY_STORAGE_KEY = 'gemini_api_key';
 const TTS_USAGE_STORAGE_KEY = 'gemini_tts_usage';
 const TTS_FREE_QUOTA = 20; // Google Gemini 免費額度
 
+/**
+ * 格式化時間（秒）為可讀字符串
+ * < 10s: 顯示 1 位小數（如 3.2s）
+ * >= 10s: 顯示整數（如 15s）
+ */
+function formatTime(seconds: number): string {
+  if (seconds < 10) {
+    return `${seconds.toFixed(1)}s`;
+  } else {
+    return `${Math.round(seconds)}s`;
+  }
+}
+
 type LoadingStage = 'analyzing' | 'generating-tts' | null;
 
 type TtsUsage = {
@@ -33,6 +46,13 @@ export const VidCastWidget = () => {
   const [error, setError] = useState('');
   const [storageAvailable, setStorageAvailable] = useState(false); // 修復：預設 false 避免 hydration mismatch
   const [ttsUsageCount, setTtsUsageCount] = useState<number>(0);
+
+  // 統計指標
+  const [metrics, setMetrics] = useState<{
+    wordCount: number;
+    textGenerationTime: number;
+    ttsGenerationTime: number | null;
+  } | null>(null);
 
   // 音頻播放器狀態
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -195,10 +215,13 @@ export const VidCastWidget = () => {
       return;
     }
 
+    const overallStartTime = Date.now();
+
     setLoading(true);
     setLoadingStage('analyzing');
     setError('');
     setResult(null);
+    setMetrics(null); // 重置統計
 
     try {
       // 第一階段：視頻分析
@@ -225,13 +248,25 @@ export const VidCastWidget = () => {
         throw new Error(data.error);
       }
 
+      // 計算統計指標
+      const textGenerationTime = (Date.now() - overallStartTime) / 1000;
+      const wordCount = data.textSummary.length;
+
       // 立即顯示文字摘要
       setResult({
         textSummary: data.textSummary,
         audioUrl: null,
       });
 
+      // 更新統計（TTS 尚未開始）
+      setMetrics({
+        wordCount,
+        textGenerationTime,
+        ttsGenerationTime: null,
+      });
+
       // 第二階段：TTS 生成（異步）
+      const ttsStartTime = Date.now();
       setLoadingStage('generating-tts');
 
       try {
@@ -253,11 +288,20 @@ export const VidCastWidget = () => {
         console.log('[TTS] API 響應數據:', ttsData);
 
         if (ttsData.success && ttsData.audioUrl) {
+          const ttsGenerationTime = (Date.now() - ttsStartTime) / 1000;
+
           // 更新結果，添加音頻
           setResult({
             textSummary: data.textSummary,
             audioUrl: ttsData.audioUrl,
           });
+
+          // 更新統計（添加 TTS 時間）
+          setMetrics((prev) => prev ? {
+            ...prev,
+            ttsGenerationTime,
+          } : null);
+
           incrementTtsUsage();
           console.log('[TTS] 語音生成成功');
         } else {
@@ -440,7 +484,10 @@ export const VidCastWidget = () => {
               <Key size={14} />
             </button>
             <button
-              onClick={() => setResult(null)}
+              onClick={() => {
+                setResult(null);
+                setMetrics(null);
+              }}
               className="text-xs text-zinc-500 hover:text-white transition"
             >
               Reset
@@ -543,6 +590,23 @@ export const VidCastWidget = () => {
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={() => setIsPlaying(false)}
               />
+            </div>
+          )}
+
+          {/* 統計標籤行 */}
+          {metrics && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <Badge color="emerald">
+                {metrics.wordCount.toLocaleString()} 字
+              </Badge>
+              <Badge color="indigo">
+                文案生成 {formatTime(metrics.textGenerationTime)}
+              </Badge>
+              {metrics.ttsGenerationTime !== null && (
+                <Badge color="zinc">
+                  音頻生成 {formatTime(metrics.ttsGenerationTime)}
+                </Badge>
+              )}
             </div>
           )}
 
