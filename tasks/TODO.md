@@ -23,9 +23,42 @@
 
 ---
 
+### 2. 播放器佔位符優化
+**問題描述**：
+- Step 2/2 (生成 TTS) 階段的播放器 skeleton 需要優化顯示效果
+- 當前 skeleton 可能需要調整樣式或位置以提升用戶體驗
+
+**待處理**：
+- 確認播放器 skeleton 在 Step 2/2 時的顯示效果
+- 優化動畫和樣式
+
+**相關文件**：
+- `widgets/vidcast/VidCastWidget.tsx` (TTS Loading 占位符區塊)
+
+---
+
 ## ✅ 已完成
 
-### 2. YouTube URL Gemini API 調用問題 - ✅ 已修復
+### 音頻播放器增強與 Loading 體驗優化 - ✅ 已完成
+**完成內容**：
+- ✅ 移除波形可視化，改用功能完整的播放器
+- ✅ 新增可拖動進度條（hover 顯示 thumb）
+- ✅ 新增倍速控制（0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x）
+- ✅ 新增時間顯示（當前時間 / 總時長）
+- ✅ 採用紅黑配色方案
+- ✅ 文字生成 Loading skeleton（7行 shimmer 動畫）
+- ✅ TTS 生成 Loading skeleton（播放器結構 pulse 動畫）
+- ✅ 修正 skeleton 顯示邏輯錯誤（移到正確的渲染區塊）
+
+**修改文件**：
+- `widgets/vidcast/VidCastWidget.tsx`
+- `app/globals.css` (shimmer 動畫)
+
+**完成時間**：2025-12-24
+
+---
+
+### YouTube URL Gemini API 調用問題 - ✅ 已修復
 **問題描述**：
 - Gemini API 返回 "The string did not match the expected pattern"
 - 根因：使用了不必要的 `mimeType: 'video/*'` 參數
@@ -53,4 +86,4 @@
 ## 📝 備註
 
 - 創建時間：2025-12-24
-- 最後更新：2025-12-24
+- 最後更新：2025-12-24 (播放器增強完成，新增播放器佔位符優化待辦)
