@@ -1,0 +1,46 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    /* 定義 CSS 變數 */
+    :root {
+      --main-color: #000000;
+      --outline-color: #FFFFFF;
+    }
+
+    /* 當系統偵測到深色模式時，自動反轉顏色 */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --main-color: #FFFFFF;
+        --outline-color: #000000;
+      }
+    }
+
+    .main-body {
+      stroke: var(--main-color);
+      fill: none;
+    }
+
+    .main-fill {
+      fill: var(--main-color);
+    }
+
+    .outline {
+      stroke: var(--outline-color);
+      fill: none;
+    }
+  </style>
+
+  <!-- Outline / Sticker Border (外層輪廓) -->
+  <!-- 這些層負責在背景顏色與主體顏色相近時提供對比 -->
+  <path d="M46 16H34C24.0589 16 16 24.0589 16 34C16 43.9411 24.0589 52 34 52H46" stroke="var(--outline-color)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Main Body (核心主體) -->
+  <!-- C 形狀 -->
+  <path class="main-body" d="M46 16H34C24.0589 16 16 24.0589 16 34C16 43.9411 24.0589 52 34 52H46" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- 右邊的小圓點裝飾 -->
+  <circle class="main-fill" cx="44" cy="34" r="3" />
+
+  <!-- 左邊的眼睛 -->
+  <circle class="main-fill" cx="28" cy="34" r="3" />
+
+</svg>
